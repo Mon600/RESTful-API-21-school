@@ -49,43 +49,6 @@ docker compose up --build
 
 Остановка с сохранением данных: `docker compose down`. Полный сброс вместе с БД и загруженными изображениями: `docker compose down -v`.
 
-## Локальная сборка и отладка
-
-Требуется JDK 21. Gradle wrapper закоммичен, отдельная установка Gradle не нужна.
-
-```bash
-# 1. Только БД в контейнере
-cd RESTfulAPI
-cp .env.example .env
-docker compose up -d db
-
-# 2. Приложение читает .env из рабочего каталога
-#    (spring.config.import=optional:file:.env[.properties]),
-#    поэтому запускайте его из папки RESTfulAPI.
-
-# Сборка исполняемого jar → build/libs/RESTfulAPI-1.0-SNAPSHOT.jar
-./gradlew bootJar
-
-# Тесты (каталога src/test пока нет, задача завершится без запуска тестов)
-./gradlew test
-
-# Запуск из Gradle
-./gradlew bootRun
-
-# Запуск jar с параметрами JVM и удалённой отладкой на порту 5005
-java -Xms256m -Xmx512m \
-  -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 \
-  -jar build/libs/RESTfulAPI-1.0-SNAPSHOT.jar
-
-# Отладка через Gradle (JVM ждёт подключения отладчика на порту 5005)
-./gradlew bootRun --debug-jvm
-```
-
-Отладка контейнера: в `.env` добавьте агент `jdwp` в `JAVA_OPTS`, а в `docker-compose.yml` раскомментируйте строку с портом `5005`.
-
-```bash
-JAVA_OPTS=-XX:MaxRAMPercentage=75.0 -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005
-```
 
 ### Переменные окружения
 
@@ -95,7 +58,7 @@ JAVA_OPTS=-XX:MaxRAMPercentage=75.0 -agentlib:jdwp=transport=dt_socket,server=y,
 | `DB_USER`, `DB_PASSWORD` | Учётные данные PostgreSQL (те же значения получает контейнер `db`) |
 | `DB_NAME`, `DB_HOST_PORT`, `APP_PORT`, `JAVA_OPTS` | Параметры Compose: имя БД, порты на хосте, опции JVM |
 
-Полный список с комментариями — в [`RESTfulAPI/.env.example`](RESTfulAPI/.env.example).
+Полный список в [`RESTfulAPI/.env.example`](RESTfulAPI/.env.example).
 
 ## Проверка функционала
 
@@ -125,46 +88,6 @@ JAVA_OPTS=-XX:MaxRAMPercentage=75.0 -agentlib:jdwp=transport=dt_socket,server=y,
 | | `DELETE /api/v1/images/{imageUuid}` | Удалить изображение |
 | | `GET /api/v1/images/products/{productUuid}/image` | Скачать изображение по UUID товара |
 | | `GET /api/v1/images/{imageUuid}` | Скачать изображение по UUID |
-
-Сценарий «поставщик → товар → остаток → изображение → клиент» (нужен `jq`):
-
-```bash
-BASE=http://localhost:8080/api/v1
-
-# Поставщик (имя только из букв, телефон — 11–12 цифр)
-SUPPLIER_ID=$(curl -s -X POST "$BASE/suppliers/" \
-  -H 'Content-Type: application/json' \
-  -d '{"name":"Acme","address":{"country":"Russia","city":"Moscow","street":"Lenina 5"},"phone":"79991234567"}' \
-  | jq -r .id)
-
-# Товар этого поставщика
-PRODUCT_ID=$(curl -s -X POST "$BASE/products/" \
-  -H 'Content-Type: application/json' \
-  -d "{\"name\":\"Keyboard\",\"category\":\"Peripherals\",\"price\":2500,\"availableStock\":10,\"supplierId\":\"$SUPPLIER_ID\"}" \
-  | jq -r .id)
-
-# Пополнить остаток на 5, затем списать 3
-curl -s -X PATCH "$BASE/products/$PRODUCT_ID/stock" -H 'Content-Type: application/json' -d '5' | jq
-curl -s -X PATCH "$BASE/products/$PRODUCT_ID" -H 'Content-Type: application/json' -d '3' | jq
-
-# Загрузить изображение (до 1 МБ) и скачать его обратно
-curl -s -X POST "$BASE/images/$PRODUCT_ID" -F "file=@./photo.png" | jq
-curl -s "$BASE/images/products/$PRODUCT_ID/image" -o product-image.png
-
-# Товары в наличии
-curl -s "$BASE/products/all" | jq
-
-# Клиент
-curl -s -X POST "$BASE/clients/" \
-  -H 'Content-Type: application/json' \
-  -d '{"name":"Ivan","surname":"Petrov","birthday":"1995-05-20","gender":"MALE","address":{"country":"Russia","city":"Moscow","street":"Lenina 5"}}' | jq
-
-# Поиск клиента и постраничный список
-curl -s "$BASE/clients/?name=Ivan" | jq
-curl -s "$BASE/clients/all?limit=10&offset=0" | jq
-```
-
-Ошибки возвращаются в едином формате `{"code": 404, "message": "...", "date": "..."}`: `404` для отсутствующих сущностей, `400` для невалидных данных, `409` при нарушении уникальности, `500` при ошибке чтения файла изображения.
 
 ## Структура проекта
 

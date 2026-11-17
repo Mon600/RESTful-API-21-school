@@ -9,10 +9,8 @@ services:
       POSTGRES_USER: ${DB_USER:-restful}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-restful_dev_password}
     ports:
-      # Только на localhost хоста — для psql / IDE, наружу БД не публикуется
       - "127.0.0.1:${DB_HOST_PORT:-15432}:5432"
     volumes:
-      # В томе лежат и таблицы, и изображения товаров (хранятся в БД как BYTEA)
       - pgdata:/var/lib/postgresql/data
     networks:
       - backend
@@ -33,19 +31,15 @@ services:
       db:
         condition: service_healthy
     environment:
-      # Эти имена читает application.properties: ${DB_URL}, ${DB_USER}, ${DB_PASSWORD}
       DB_URL: jdbc:postgresql://db:5432/${DB_NAME:-restful_api}
       DB_USER: ${DB_USER:-restful}
       DB_PASSWORD: ${DB_PASSWORD:-restful_dev_password}
       JAVA_OPTS: ${JAVA_OPTS:--XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError}
     ports:
       - "${APP_PORT:-8080}:8080"
-      # Удалённая отладка (раскомментируйте и добавьте в JAVA_OPTS агент jdwp, см. README):
-      # - "127.0.0.1:5005:5005"
     networks:
       - backend
     healthcheck:
-      # springdoc публикует OpenAPI-описание без авторизации: GET /v3/api-docs
       test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/v3/api-docs || exit 1"]
       interval: 10s
       timeout: 5s
